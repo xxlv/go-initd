@@ -1,0 +1,7 @@
+[[services]]
+name = "This is a test"
+cmd = "./examples/main1/main1"
+
+[[services]]
+name = "This is a test 2 "
+cmd = "./examples/main2/main2"
