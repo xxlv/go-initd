@@ -10,12 +10,10 @@ import (
 )
 
 func main() {
-	sigs := make(chan os.Signal, 1)
+	sigs := make(chan os.Signal)
 	signal.Notify(sigs, syscall.SIGTERM)
-
 	go func() {
 		for {
-			println("----------------")
 			x := <-sigs
 			println("accept", x.String())
 			time.Sleep(3 * time.Second)
@@ -29,7 +27,8 @@ func main() {
 		fmt.Fprintf(w, "Hello, World Main1!")
 	})
 
-	fmt.Println("Listen on 9080...")
+	fmt.Println("Listen on 9080 ...")
+
 	if err := http.ListenAndServe(":9080", nil); err != nil {
 		panic(err)
 	}

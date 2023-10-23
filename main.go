@@ -19,6 +19,7 @@ type RunStat struct {
 	sync.Mutex
 	isRunning bool
 	isStoping bool
+	isKilled  bool
 
 	Name    string
 	CmdPath string
@@ -36,6 +37,7 @@ func (rs *RunStat) Update() {
 		}
 	}
 }
+
 func (rs *RunStat) Stop() error {
 	return stop(rs.Pid)
 }
@@ -52,9 +54,14 @@ func logf(format string, a ...any) {
 }
 
 func errorf(format string, a ...any) {
-	log.Fatalf(format, a...)
+	log.Default().Printf(format+"\n", a...)
 }
 
+func warnf(format string, a ...any) {
+	log.Default().Printf(color.YellowString(fmt.Sprintf(format+"\n", a...)))
+}
+
+// doRunAndWatch will loop all command and execute run.
 func doRunAndWatch(rs map[string]*RunStat) {
 	running := make(map[string]bool)
 	go func() {
@@ -73,7 +80,6 @@ func doRunAndWatch(rs map[string]*RunStat) {
 				}
 				if s.Pid > 0 && !running[name] {
 					logf("new pid %s [pid=%s] create for prog name `%s` ", color.CyanString(s.CmdPath), color.GreenString(fmt.Sprint(s.Pid)), color.MagentaString(name))
-
 					running[name] = true
 				}
 				s.Unlock()
@@ -82,9 +88,63 @@ func doRunAndWatch(rs map[string]*RunStat) {
 				logf("all program started ")
 				break
 			}
-
 		}
 	}()
+
+	go func() {
+		anyAlivePrintOnceFlag := false
+		for {
+			// check pid every 1 second
+			ticker := time.NewTicker(1 * time.Second)
+			select {
+			case _ = <-ticker.C:
+				anyAlive := false
+				for _, s := range rs {
+					healthyCheck(s)
+					if !s.isKilled {
+						anyAlive = true
+					}
+				}
+				if !anyAlive && !anyAlivePrintOnceFlag {
+					warnf("*all pids is killed")
+					anyAlivePrintOnceFlag = true
+				}
+				ticker.Reset(1 * time.Second)
+			}
+
+		}
+
+	}()
+}
+
+// check pid and update stat
+func healthyCheck(s *RunStat) (err error) {
+	if !s.isKilled {
+		err = testPid(s.Pid)
+		if err != nil {
+			errorf(color.RedString(fmt.Sprintf("pid %d is killed", s.Pid)))
+			s.isKilled = true
+		}
+	}
+	return
+}
+
+// test if pid is exists ,if not return error
+func testPid(pid int) error {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		errorf("can not find pid %d,error: %s", pid, err.Error())
+	}
+
+	if process == nil {
+		errorf("pid %s maybe killed", color.CyanString(fmt.Sprint(pid)))
+	}
+	err = process.Signal(syscall.Signal(0))
+	if err != nil {
+
+		return fmt.Errorf("process %d does not exist: %s", pid, err)
+	}
+	return nil
 }
 
 func runServices(c Config) (runningmap map[string]*RunStat, err error) {
@@ -119,8 +179,7 @@ func run(name, cmd string) (command *exec.Cmd, err error) {
 }
 
 func main() {
-	closedSecond := 5 * time.Second
-
+	closedSecond := 1 * time.Second
 	content, err := os.ReadFile("initd.toml")
 	if err != nil {
 		log.Fatal(err)
@@ -147,8 +206,8 @@ func main() {
 	}
 }
 
+// isClosedAll check if all pids are closed.
 func isClosedAll(runningmap map[string]*RunStat) bool {
-
 	for _, rs := range runningmap {
 		if rs.isRunning {
 			return true
@@ -165,7 +224,7 @@ func shutdown(runningmap map[string]*RunStat) {
 	}
 	for _, rs := range runningmap {
 		rs.Lock()
-		if rs.isStoping {
+		if rs.isStoping || rs.isKilled {
 			continue
 		} else {
 			rs.isStoping = true
@@ -177,7 +236,7 @@ func shutdown(runningmap map[string]*RunStat) {
 
 }
 
-// stop given Pid
+// stop given pid
 func stop(pid int) (err error) {
 	if pid <= 0 {
 		return errors.New("invalid pid `" + fmt.Sprint(pid) + "`")
@@ -187,7 +246,8 @@ func stop(pid int) (err error) {
 		errorf("can not find pid= `%s`, error: %s", color.RedString(fmt.Sprint(pid)), err.Error())
 		return
 	}
-	err = process.Signal(syscall.SIGTERM)
+	// send new signal
+	err = process.Signal(syscall.Signal(syscall.SIGTERM))
 	if err != nil {
 		errorf("can not stop pid= `%s`, error: %s", color.RedString(fmt.Sprint(pid)), err.Error())
 		return
