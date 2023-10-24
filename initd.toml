@@ -1,7 +1,11 @@
 [[services]]
-name = "This is a test"
+name = "app1"
 cmd = "./examples/main1/main1"
 
 [[services]]
-name = "This is a test 2 "
+name = "app2"
 cmd = "./examples/main2/main2"
+
+[[services]]
+name = "app-not-exists-3"
+cmd = "./examples/main2/main3"

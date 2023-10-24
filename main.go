@@ -65,6 +65,7 @@ func warnf(format string, a ...any) {
 // doRunAndWatch will loop all command and execute run.
 func doRunAndWatch(rs map[string]*RunStat) {
 	running := make(map[string]bool)
+	// run all
 	go func() {
 		for {
 			for name, s := range rs {
@@ -82,6 +83,9 @@ func doRunAndWatch(rs map[string]*RunStat) {
 				if s.Pid > 0 && !running[name] {
 					logf("new pid %s [pid=%s] create for prog name `%s` ", color.CyanString(s.CmdPath), color.GreenString(fmt.Sprint(s.Pid)), color.MagentaString(name))
 					running[name] = true
+				} else if s.Err != nil && !running[name] {
+					running[name] = true
+					warnf("%s start failed, error is %s", color.HiRedString(name), s.Err.Error())
 				}
 				s.Unlock()
 			}
@@ -91,7 +95,7 @@ func doRunAndWatch(rs map[string]*RunStat) {
 			}
 		}
 	}()
-
+	// check
 	go func() {
 		anyAlivePrintOnceFlag := false
 		for {
@@ -120,7 +124,7 @@ func doRunAndWatch(rs map[string]*RunStat) {
 
 // check pid and update stat
 func healthyCheck(s *RunStat) (err error) {
-	if !s.isKilled {
+	if !s.isKilled && s.Pid > 0 {
 		err = testPid(s.Pid)
 		if err != nil {
 			errorf(color.RedString(fmt.Sprintf("pid %d is killed", s.Pid)))
@@ -156,6 +160,16 @@ func runServices(c Config) (runningmap map[string]*RunStat, err error) {
 	for _, s := range c.Services {
 		cmd := s.Cmd
 		name := s.Name
+
+		if !fileExist(cmd) {
+			runningmap[name] = &RunStat{
+				Err:     fmt.Errorf("program %s not found", cmd),
+				Command: nil,
+				CmdPath: cmd,
+				Name:    name,
+			}
+			continue
+		}
 		command, err := run(name, cmd)
 
 		runningmap[name] = &RunStat{
@@ -184,7 +198,7 @@ func main() {
 	flag.StringVar(&config, "config", "initd.toml", "config path")
 	flag.Parse()
 
-	if _, err := os.Stat(config); os.IsNotExist(err) {
+	if !fileExist(config) {
 		flag.Usage = func() {
 			fmt.Fprintf(os.Stderr, fmt.Sprintf("Usage of initd \n %s \n", color.BlackString("You can quickly start multiple processes in a simple way.")))
 			flag.PrintDefaults()
@@ -197,6 +211,13 @@ func main() {
 		startWith(config)
 	}
 
+}
+
+func fileExist(fname string) bool {
+	if _, err := os.Stat(fname); os.IsNotExist(err) {
+		return false
+	}
+	return true
 }
 
 func startWith(fname string) {
