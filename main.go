@@ -224,35 +224,6 @@ func fileCreate(fname, content string) (err error) {
 	return
 }
 
-func startWith(fname string, prog *Initd) {
-
-	closedSecond := 1 * time.Second
-	content, err := os.ReadFile(fname)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-	var config Config
-	if _, err := toml.Decode(string(content), &config); err != nil {
-		log.Fatal(err)
-		return
-	}
-	c := make(chan os.Signal)
-	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-	sermap, _ := runServices(config)
-	<-c
-	shutdown(sermap)
-
-	ticker := time.NewTicker(closedSecond)
-	select {
-	case _ = <-ticker.C:
-		if isClosedAll(sermap) {
-			logf("all program closed")
-			return
-		}
-	}
-}
-
 // isClosedAll check if all pids are closed.
 func isClosedAll(runningmap map[string]*RunStat) bool {
 	for _, rs := range runningmap {
@@ -323,6 +294,37 @@ func (i *Initd) destory() {
 	logf("clean path %s", color.CyanString(i.tmpDataPath))
 }
 
+func (i *Initd) startWith(fname string) {
+	i.prepare()
+	defer i.destory()
+
+	closedSecond := 1 * time.Second
+	content, err := os.ReadFile(fname)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	var config Config
+	if _, err := toml.Decode(string(content), &config); err != nil {
+		log.Fatal(err)
+		return
+	}
+	c := make(chan os.Signal)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+	sermap, _ := runServices(config)
+	<-c
+	shutdown(sermap)
+
+	ticker := time.NewTicker(closedSecond)
+	select {
+	case _ = <-ticker.C:
+		if isClosedAll(sermap) {
+			logf("all program closed")
+			return
+		}
+	}
+}
+
 func main() {
 
 	prog := &Initd{}
@@ -344,9 +346,7 @@ func main() {
 		return
 	} else {
 		logf("prepare using config file `%s`", color.BlackString(config))
-		prog.prepare()
-		startWith(config, prog)
-		defer prog.destory()
+		prog.startWith(config)
 	}
 
 }
