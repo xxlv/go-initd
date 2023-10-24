@@ -8,13 +8,19 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	_ "embed"
+
 	"github.com/BurntSushi/toml"
 	"github.com/fatih/color"
 )
+
+//go:embed initd.tpl
+var configTpl string
 
 type RunStat struct {
 	sync.Mutex
@@ -45,8 +51,9 @@ func (rs *RunStat) Stop() error {
 
 type Config struct {
 	Services []struct {
-		Name string `toml:"name"`
-		Cmd  string `toml:"cmd"`
+		Name string   `toml:"name"`
+		Cmd  string   `toml:"cmd"`
+		Args []string `toml:"args"`
 	} `toml:"services"`
 }
 
@@ -170,7 +177,7 @@ func runServices(c Config) (runningmap map[string]*RunStat, err error) {
 			}
 			continue
 		}
-		command, err := run(name, cmd)
+		command, err := run(name, cmd, s.Args)
 
 		runningmap[name] = &RunStat{
 			Err:     err,
@@ -185,32 +192,13 @@ func runServices(c Config) (runningmap map[string]*RunStat, err error) {
 	return
 }
 
-func run(name, cmd string) (command *exec.Cmd, err error) {
-	command = exec.Command(cmd)
+func run(name, cmd string, args []string) (command *exec.Cmd, err error) {
+	command = exec.Command(cmd, args...)
 	// TODO: stdout & err
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
+
 	return
-}
-
-func main() {
-	var config string
-	flag.StringVar(&config, "config", "initd.toml", "config path")
-	flag.Parse()
-
-	if !fileExist(config) {
-		flag.Usage = func() {
-			fmt.Fprintf(os.Stderr, fmt.Sprintf("Usage of initd \n %s \n", color.BlackString("You can quickly start multiple processes in a simple way.")))
-			flag.PrintDefaults()
-		}
-		flag.Usage()
-		return
-
-	} else {
-		logf("prepare using config file `%s`", color.BlackString(config))
-		startWith(config)
-	}
-
 }
 
 func fileExist(fname string) bool {
@@ -218,6 +206,22 @@ func fileExist(fname string) bool {
 		return false
 	}
 	return true
+}
+
+func fileCreate(fname, content string) (err error) {
+	if !strings.HasSuffix(fname, ".toml") {
+		fname = fmt.Sprintf("%s.toml", fname)
+	}
+	file, err := os.Create(fname)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer file.Close()
+	_, err = file.WriteString(content)
+	logf("new file %s created", color.CyanString(fname))
+
+	return
 }
 
 func startWith(fname string) {
@@ -297,4 +301,29 @@ func stop(pid int) (err error) {
 	}
 	logf("success stop pid %s", color.GreenString(fmt.Sprint(pid)))
 	return
+}
+
+func main() {
+	var config, newp string
+
+	flag.StringVar(&config, "config", "initd.toml", "config path")
+	flag.StringVar(&newp, "new", "", "create new config file template")
+	flag.Parse()
+
+	if newp != "" {
+		//  create new one
+		fileCreate(newp, configTpl)
+		return
+	} else if !fileExist(config) {
+		flag.Usage = func() {
+			fmt.Fprintf(os.Stderr, fmt.Sprintf("Usage of initd \n %s \n", color.BlackString("You can quickly start multiple processes in a simple way.")))
+			flag.PrintDefaults()
+		}
+		flag.Usage()
+		return
+	} else {
+		logf("prepare using config file `%s`", color.BlackString(config))
+		startWith(config)
+	}
+
 }

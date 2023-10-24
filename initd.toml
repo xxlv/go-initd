@@ -1,6 +1,7 @@
 [[services]]
 name = "app1"
 cmd = "./examples/main1/main1"
+args = ["-f", "testfile"]
 
 [[services]]
 name = "app2"
