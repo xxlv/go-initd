@@ -224,7 +224,7 @@ func fileCreate(fname, content string) (err error) {
 	return
 }
 
-func startWith(fname string) {
+func startWith(fname string, prog *Initd) {
 
 	closedSecond := 1 * time.Second
 	content, err := os.ReadFile(fname)
@@ -303,9 +303,30 @@ func stop(pid int) (err error) {
 	return
 }
 
-func main() {
-	var config, newp string
+type Initd struct {
+	tmpDataPath string
+}
 
+// prepare init env
+func (i *Initd) prepare() {
+	dname, _ := os.MkdirTemp("", "inind")
+	i.tmpDataPath = dname
+	logf("create new temp dir for current initd , %s", color.CyanString(dname))
+}
+
+// clean env
+func (i *Initd) destory() {
+	err := os.RemoveAll(i.tmpDataPath)
+	if err != nil {
+		errorf("can not clean path %s, errors: %s", i.tmpDataPath, err.Error())
+	}
+	logf("clean path %s", color.CyanString(i.tmpDataPath))
+}
+
+func main() {
+
+	prog := &Initd{}
+	var config, newp string
 	flag.StringVar(&config, "config", "initd.toml", "config path")
 	flag.StringVar(&newp, "new", "", "create new config file template")
 	flag.Parse()
@@ -323,7 +344,9 @@ func main() {
 		return
 	} else {
 		logf("prepare using config file `%s`", color.BlackString(config))
-		startWith(config)
+		prog.prepare()
+		startWith(config, prog)
+		defer prog.destory()
 	}
 
 }
