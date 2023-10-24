@@ -11,8 +11,8 @@ Sleep 500ms
 Enter
 
 Type "go run ."
-Sleep 1s
 
 Enter
+Sleep 5s
 
 Type "echo 'That all!'"
