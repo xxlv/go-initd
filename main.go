@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -179,8 +180,29 @@ func run(name, cmd string) (command *exec.Cmd, err error) {
 }
 
 func main() {
+	var config string
+	flag.StringVar(&config, "config", "initd.toml", "config path")
+	flag.Parse()
+
+	if _, err := os.Stat(config); os.IsNotExist(err) {
+		flag.Usage = func() {
+			fmt.Fprintf(os.Stderr, fmt.Sprintf("Usage of initd \n %s \n", color.BlackString("You can quickly start multiple processes in a simple way.")))
+			flag.PrintDefaults()
+		}
+		flag.Usage()
+		return
+
+	} else {
+		logf("prepare using config file `%s`", color.BlackString(config))
+		startWith(config)
+	}
+
+}
+
+func startWith(fname string) {
+
 	closedSecond := 1 * time.Second
-	content, err := os.ReadFile("initd.toml")
+	content, err := os.ReadFile(fname)
 	if err != nil {
 		log.Fatal(err)
 		return
