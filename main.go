@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -51,9 +52,10 @@ func (rs *RunStat) Stop() error {
 
 type Config struct {
 	Services []struct {
-		Name string   `toml:"name"`
-		Cmd  string   `toml:"cmd"`
-		Args []string `toml:"args"`
+		Name    string   `toml:"name"`
+		Cmd     string   `toml:"cmd"`
+		Args    []string `toml:"args"`
+		Disable bool     `toml:"disable"`
 	} `toml:"services"`
 }
 
@@ -167,18 +169,24 @@ func runServices(c Config) (runningmap map[string]*RunStat, err error) {
 	for _, s := range c.Services {
 		cmd := s.Cmd
 		name := s.Name
-
+		var runErr error
 		if !fileExist(cmd) {
+			err = fmt.Errorf("program %s not found", cmd)
+		} else if s.Disable {
+			runErr = fmt.Errorf("program %s disabled", cmd)
+		}
+
+		if runErr != nil {
 			runningmap[name] = &RunStat{
-				Err:     fmt.Errorf("program %s not found", cmd),
+				Err:     runErr,
 				Command: nil,
 				CmdPath: cmd,
 				Name:    name,
 			}
 			continue
 		}
-		command, err := run(name, cmd, s.Args)
 
+		command, err := run(name, cmd, s.Args)
 		runningmap[name] = &RunStat{
 			Err:     err,
 			Command: command,
@@ -192,8 +200,20 @@ func runServices(c Config) (runningmap map[string]*RunStat, err error) {
 	return
 }
 
+func dirname(name string) (d string) {
+	if name == "" {
+		return ""
+	}
+	d = filepath.Dir(name)
+	return
+}
+
 func run(name, cmd string, args []string) (command *exec.Cmd, err error) {
+	// search dir
+	dname := dirname(cmd)
 	command = exec.Command(cmd, args...)
+	command.Dir = dname
+	logf("change dir to %s", dname)
 	// TODO: stdout & err
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
@@ -329,7 +349,7 @@ func main() {
 
 	prog := &Initd{}
 	var config, newp string
-	flag.StringVar(&config, "config", "initd.toml", "config path")
+	flag.StringVar(&config, "config", "work.local.toml", "config path")
 	flag.StringVar(&newp, "new", "", "create new config file template")
 	flag.Parse()
 
