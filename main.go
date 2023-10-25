@@ -213,7 +213,7 @@ func run(name, cmd string, args []string) (command *exec.Cmd, err error) {
 	dname := dirname(cmd)
 	command = exec.Command(cmd, args...)
 	command.Dir = dname
-	logf("change dir to %s", dname)
+	// logf("change dir to %s", dname)
 	// TODO: stdout & err
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
@@ -346,10 +346,9 @@ func (i *Initd) startWith(fname string) {
 }
 
 func main() {
-
 	prog := &Initd{}
 	var config, newp string
-	flag.StringVar(&config, "config", "work.local.toml", "config path")
+	flag.StringVar(&config, "config", "initd.toml", "config path")
 	flag.StringVar(&newp, "new", "", "create new config file template")
 	flag.Parse()
 
