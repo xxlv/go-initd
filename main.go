@@ -52,10 +52,11 @@ func (rs *RunStat) Stop() error {
 
 type Config struct {
 	Services []struct {
-		Name    string   `toml:"name"`
-		Cmd     string   `toml:"cmd"`
-		Args    []string `toml:"args"`
-		Disable bool     `toml:"disable"`
+		Name      string   `toml:"name"`
+		Cmd       string   `toml:"cmd"`
+		Args      []string `toml:"args"`
+		Disable   bool     `toml:"disable"`
+		Workspace string   `toml:"workspace"`
 	} `toml:"services"`
 }
 
@@ -186,7 +187,7 @@ func runServices(c Config) (runningmap map[string]*RunStat, err error) {
 			continue
 		}
 
-		command, err := run(name, cmd, s.Args)
+		command, err := run(name, cmd, s.Workspace, s.Args)
 		runningmap[name] = &RunStat{
 			Err:     err,
 			Command: command,
@@ -210,7 +211,7 @@ func dirname(name string) (d string) {
 	return
 }
 
-func run(name, cmd string, args []string) (command *exec.Cmd, err error) {
+func run(name, cmd, workspace string, args []string) (command *exec.Cmd, err error) {
 
 	var dname string
 	// if cmd not contains `/`, we just run this command (look up for default path)
@@ -220,9 +221,12 @@ func run(name, cmd string, args []string) (command *exec.Cmd, err error) {
 	}
 	// search dir
 	command = exec.Command(cmd, args...)
-	if dname != "" {
+	if workspace != "" {
+		command.Dir = workspace
+	} else if dname != "" {
 		command.Dir = dname
 	}
+
 	// logf("change dir to %s", dname)
 	// TODO: stdout & err
 	command.Stdout = os.Stdout
