@@ -204,11 +204,15 @@ func dirname(name string) (d string) {
 	if name == "" {
 		return ""
 	}
-	d = filepath.Dir(name)
+	path, _ := filepath.Abs(name)
+	index := strings.LastIndex(path, string(os.PathSeparator))
+	d = path[:index]
 	return
 }
 
 func run(name, cmd string, args []string) (command *exec.Cmd, err error) {
+
+	cmd, _ = filepath.Abs(cmd)
 	// search dir
 	dname := dirname(cmd)
 	command = exec.Command(cmd, args...)

@@ -2,6 +2,7 @@
 name = "app1"
 cmd = "./examples/main1/main1"
 args = ["-f", "testfile"]
+disable = false
 
 [[services]]
 name = "app2"
