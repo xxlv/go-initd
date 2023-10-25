@@ -212,11 +212,17 @@ func dirname(name string) (d string) {
 
 func run(name, cmd string, args []string) (command *exec.Cmd, err error) {
 
-	cmd, _ = filepath.Abs(cmd)
+	var dname string
+	// if cmd not contains `/`, we just run this command (look up for default path)
+	if strings.Contains(cmd, string(os.PathSeparator)) {
+		cmd, _ = filepath.Abs(cmd)
+		dname = dirname(cmd)
+	}
 	// search dir
-	dname := dirname(cmd)
 	command = exec.Command(cmd, args...)
-	command.Dir = dname
+	if dname != "" {
+		command.Dir = dname
+	}
 	// logf("change dir to %s", dname)
 	// TODO: stdout & err
 	command.Stdout = os.Stdout
@@ -352,7 +358,7 @@ func (i *Initd) startWith(fname string) {
 func main() {
 	prog := &Initd{}
 	var config, newp string
-	flag.StringVar(&config, "config", "initd.toml", "config path")
+	flag.StringVar(&config, "config", "initd.local.toml", "config path")
 	flag.StringVar(&newp, "new", "", "create new config file template")
 	flag.Parse()
 
